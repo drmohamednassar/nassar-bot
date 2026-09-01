@@ -1,10 +1,15 @@
 import { generateWAMessageFromContent, prepareWAMessageMedia } from "@whiskeysockets/baileys";
 
 export default async function (sock, m, from, args, config) {
-  const senderNumber = (m.key.participant || m.key.remoteJid).split("@")[0];
+  const senderJid = m.key.participant || m.key.remoteJid || "";
+  const senderNumber = senderJid.split("@")[0].replace(/[^0-9]/g, "");
 
-  // التحقق الحصري من قائمة sudo
-  if (!config.sudo.includes(senderNumber)) {
+  // التحقق من صلاحيات المطور (sudo)
+  const isSudo = Array.isArray(config.sudo) 
+    ? config.sudo.some(num => String(num).replace(/[^0-9]/g, "") === senderNumber)
+    : String(config.sudo || "").replace(/[^0-9]/g, "") === senderNumber;
+
+  if (!isSudo) {
     return sock.sendMessage(from, { 
       text: "⛔ *عذراً، هذه اللوحة مخصصة للمطورين وحسابات VIP المصرح لها فقط!*" 
     }, { quoted: m });
@@ -24,7 +29,10 @@ export default async function (sock, m, from, args, config) {
   const vipHeaderImage = "https://i.postimg.cc/XYtWtSYw/1299888.png";
 
   try {
-    const media = await prepareWAMessageMedia({ image: { url: vipHeaderImage } }, { upload: sock.waUploadToServer });
+    const media = await prepareWAMessageMedia(
+      { image: { url: vipHeaderImage } }, 
+      { upload: sock.waUploadToServer }
+    );
 
     const interactiveMessage = {
       header: {
@@ -36,7 +44,7 @@ export default async function (sock, m, from, args, config) {
         text: vipCard
       },
       footer: {
-        text: `🛡️ لوحة التحكم السريعة - ${config.botName}`
+        text: `🛡️ لوحة التحكم السريعة - ${config.botName || "BOT"}`
       },
       nativeFlowMessage: {
         buttons: [
@@ -71,118 +79,41 @@ export default async function (sock, m, from, args, config) {
       }
     };
 
-    const msg = generateWAMessageFromContent(from, {
-      viewOnceMessage: {
-        message: {
-          interactiveMessage
-        }
-      }
-    }, { quoted: m });
-
-    await sock.relayMessage(from, msg.message, { messageId: msg.key.id });
-
-  } catch (err) {
-    await sock.sendMessage(from, {
-      text: `${vipCard}\n\nالأوامر المتاحة:\n* ${config.prefix}bc [رسالة]\n* ${config.prefix}join [رابط]\n* ${config.prefix}leave\n* ${config.prefix}group [open/close]\n* ${config.prefix}del\n* ${config.prefix}vv`
-    }, { quoted: m });
-  }
-}
-      footer: {
-        text: `🛡️ لوحة التحكم السريعة - ${config.botName}`
-      },
-      nativeFlowMessage: {
-        buttons: [
-          {
-            name: "single_select",
-            buttonParamsJson: JSON.stringify({
-              title: "⚡ أوامر التحكم السريع",
-              sections: [
-                {
-                  title: "👑 أوامر السيطرة والإذاعة",
-                  rows: [
-                    { id: `${config.prefix}bc`, title: "📢 إذاعة عامة", description: "إرسال رسالة لكل الجروبات المشترك بها البوت" },
-                    { id: `${config.prefix}join`, title: "🚪 دخول مجموعة", description: "انضمام البوت لأي جروب فوراً عبر الرابط" },
-                    { id: `${config.prefix}leave`, title: "👋 مغادرة المجموعة", description: "خروج البوت من الجروب الحالي فوراً" }
-                  ]
-                },
-                {
-                  title: "🛡️ أدوات الإدارة المتقدمة",
-                  rows: [
-                    { id: `${config.prefix}group close`, title: "🔒 قفل الجروب فوراً", description: "منع الأعضاء من الكتابة داخل الشات" },
-                    { id: `${config.prefix}group open`, title: "🔓 فتح الجروب فوراً", description: "السماح لجميع الأعضاء بالكتابة" },
-                    { id: `${config.prefix}del`, title: "🗑️ حذف رسالة", description: "حذف أي رسالة مزعجة بالرد عليها" },
-                    { id: `${config.prefix}ping`, title: "⚡ فحص سرعة السيرفر", description: "فحص استقرار الخادم وسرعة الرد" },
-                    { id: `${config.prefix}profile`, title: "👤 كشف حساب", description: "جلب معلومات وبروفايل أي شخص بالمنشن/الرد" }
-                  ]
-                }
-              ]
-            })
+    const msg = generateWAMessageFromContent(
+      from,
+      {
+        viewOnceMessage: {
+          message: {
+            interactiveMessage
           }
-        ]
-      }
-    };
-
-    const msg = generateWAMessageFromContent(from, {
-      viewOnceMessage: {
-        message: {
-          interactiveMessage
         }
-      }
-    }, { quoted: m });
-
-    await sock.relayMessage(from, msg.message, { messageId: msg.key.id });
-
-  } catch (err) {
-    await sock.sendMessage(from, {
-      text: `${vipCard}\n\nالأوامر المتاحة:\n* ${config.prefix}bc [رسالة]\n* ${config.prefix}join [رابط]\n* ${config.prefix}leave\n* ${config.prefix}group [open/close]\n* ${config.prefix}del`
-    }, { quoted: m });
-  }
-}
-      footer: {
-        text: `🛡️ تحكم المطورين - ${config.botName}`
       },
-      nativeFlowMessage: {
-        buttons: [
-          {
-            name: "single_select",
-            buttonParamsJson: JSON.stringify({
-              title: "⚡ أوامر التحكم السريع",
-              sections: [
-                {
-                  title: "👑 أوامر الإدارة والسيطرة",
-                  rows: [
-                    { id: `${config.prefix}bc`, title: "📢 إذاعة عامة", description: "إرسال رسالة لكل المجموعات المشترك بها البوت" },
-                    { id: `${config.prefix}join`, title: "🚪 دخول مجموعة", description: "انضمام البوت لجروب عبر الرابط" },
-                    { id: `${config.prefix}leave`, title: "👋 مغادرة المجموعة", description: "خروج البوت من الجروب الحالي فوراً" }
-                  ]
-                },
-                {
-                  title: "🛠️ أدوات المطور الإضافية",
-                  rows: [
-                    { id: `${config.prefix}del`, title: "🗑️ حذف رسالة", description: "حذف أي رسالة بالرد عليها" },
-                    { id: `${config.prefix}ping`, title: "⚡ فحص السيرفر", description: "فحص سرعة واستقرار الاتصال" }
-                  ]
-                }
-              ]
-            })
-          }
-        ]
-      }
-    };
-
-    const msg = generateWAMessageFromContent(from, {
-      viewOnceMessage: {
-        message: {
-          interactiveMessage
-        }
-      }
-    }, { quoted: m });
+      { quoted: m }
+    );
 
     await sock.relayMessage(from, msg.message, { messageId: msg.key.id });
 
   } catch (err) {
-    await sock.sendMessage(from, {
-      text: `${vipCard}\n\nالأوامر المتاحة:\n* ${config.prefix}join [رابط]\n* ${config.prefix}leave\n* ${config.prefix}bc [نص]\n* ${config.prefix}del`
-    }, { quoted: m });
+    const fallbackText = `
+${vipCard}
+
+👑 *أوامر المطور المتاحة:*
+* ${config.prefix}bc [نص الرسالة]
+* ${config.prefix}join [رابط الجروب]
+* ${config.prefix}leave
+* ${config.prefix}group [open / close]
+* ${config.prefix}del (بالرد على الرسالة)
+* ${config.prefix}vv (بالرد على ميديا العرض لمرة واحدة)
+* ${config.prefix}ping
+`.trim();
+
+    await sock.sendMessage(
+      from,
+      {
+        image: { url: vipHeaderImage },
+        caption: fallbackText
+      },
+      { quoted: m }
+    );
   }
 }
