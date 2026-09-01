@@ -1,0 +1,15 @@
+{
+  "name": "nassar-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp Multi-Device Bot by Mohamed Nassar",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.8",
+    "axios": "^1.7.9",
+    "pino": "^9.6.0"
+  }
+}
