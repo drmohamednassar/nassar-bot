@@ -21,7 +21,7 @@ export default async function (sock, m, from, args, config) {
 ╰━━━━━━━━━━━━━━━━━━━━━━━━╯
 `.trim();
 
-  const vipHeaderImage = "https://images.wallpapersden.com/image/download/kurumi-tokisaki-date-a-live-anime-girl_bW1sZ2aUmZqaraWkpJRmZ21lrWxnZQ.jpg";
+  const vipHeaderImage = "https://i.postimg.cc/XYtWtSYw/1299888.png";
 
   try {
     const media = await prepareWAMessageMedia({ image: { url: vipHeaderImage } }, { upload: sock.waUploadToServer });
