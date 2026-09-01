@@ -13,7 +13,7 @@ export default {
   ],
   
   // رابط القناة الرسمية
-  channelLink: "https://whatsapp.com/channel/0029VaXXXXXXXXXX",
+  channelLink: "https://whatsapp.com/channel/0029VbDWevl545urcgEJLl0K",
   
   prefix: ".",
   stickerPack: "سورس محمد نصار",
