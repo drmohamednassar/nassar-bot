@@ -1,22 +1,41 @@
 import axios from "axios";
 
 export default async function (sock, m, from, args, config) {
-  const url = args[0];
-  if (!url) return sock.sendMessage(from, { text: "⚠️ أرسل رابط فيديو يوتيوب بعد الأمر.\nمثال: .ytmp4 https://youtu.be/xxxxxx" }, { quoted: m });
+  const query = args.join(" ").trim();
+  if (!query) {
+    return sock.sendMessage(from, { 
+      text: "⚠️ يرجى كتابة اسم الفيديو أو وضع رابط يوتيوب.\nمثال:\n.ytmp4 https://youtu.be/xxxx" 
+    }, { quoted: m });
+  }
 
   try {
-    await sock.sendMessage(from, { text: "⏳ جاري جلب الفيديو من يوتيوب..." }, { quoted: m });
-    const res = await axios.get(`https://api.giftedtech.web.id/api/download/ytmp4?apikey=gifted&url=${encodeURIComponent(url)}`);
-    const downloadUrl = res.data?.result?.download_url;
-    const title = res.data?.result?.title || "فيديو يوتيوب";
+    await sock.sendMessage(from, { text: "⏳ جاري معالجة وتنزيل الفيديو..." }, { quoted: m });
 
-    if (!downloadUrl) throw new Error("Video not found");
+    let videoUrl = query;
+    const isUrl = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/i.test(query);
+
+    if (!isUrl) {
+      const searchRes = await axios.get(`https://api.agatz.xyz/api/ytsearch?message=${encodeURIComponent(query)}`);
+      videoUrl = searchRes.data?.data?.[0]?.url;
+      if (!videoUrl) throw new Error("لم يتم العثور على الفيديو");
+    }
+
+    const res = await axios.get(`https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(videoUrl)}`);
+    const downloadUrl = res.data?.data?.dl;
+    const caption = res.data?.data?.title || "Video";
+
+    if (!downloadUrl) throw new Error("تعذر جلب رابط الفيديو");
 
     await sock.sendMessage(from, {
       video: { url: downloadUrl },
-      caption: `🎬 *${title}*\n\n✅ تم التحميل بواسطة *${config.botName}*`
+      caption: `🎬 ${caption}`,
+      mimetype: "video/mp4"
     }, { quoted: m });
-  } catch {
-    await sock.sendMessage(from, { text: "❌ تعذر تحميل الفيديو، تأكد من صحة الرابط." }, { quoted: m });
+
+  } catch (error) {
+    console.error("YTMP4 Error:", error?.message);
+    await sock.sendMessage(from, { 
+      text: "❌ تعذر تحميل الفيديو، تأكد من صحة الرابط." 
+    }, { quoted: m });
   }
 }
