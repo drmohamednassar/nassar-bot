@@ -1,142 +1,149 @@
-// تخزين الجلسات النشطة للألعاب في الذاكرة
-const games = new Map();
-
-function renderBoard(board) {
-  const symbols = { 0: "1️⃣", 1: "2️⃣", 2: "3️⃣", 3: "4️⃣", 4: "5️⃣", 5: "6️⃣", 6: "7️⃣", 7: "8️⃣", 8: "9️⃣", X: "❌", O: "⭕" };
-  const b = board.map((v, i) => (v ? symbols[v] : symbols[i]));
-  return `
-${b[0]} ┃ ${b[1]} ┃ ${b[2]}
-━━━╋━━━╋━━━
-${b[3]} ┃ ${b[4]} ┃ ${b[5]}
-━━━╋━━━╋━━━
-${b[6]} ┃ ${b[7]} ┃ ${b[8]}
-`.trim();
-}
-
-function checkWinner(b) {
-  const winPatterns = [
-    [0, 1, 2], [3, 4, 5], [6, 7, 8],
-    [0, 3, 6], [1, 4, 7], [2, 5, 8],
-    [0, 4, 8], [2, 4, 6]
-  ];
-  for (let [x, y, z] of winPatterns) {
-    if (b[x] && b[x] === b[y] && b[y] === b[z]) return b[x];
-  }
-  if (b.every(cell => cell !== null)) return "tie";
-  return null;
-}
+// حفظ الألعاب في الذاكرة العامة لمنع مسحها عند تكرار استدعاء الملف
+global.xoGames = global.xoGames || {};
 
 export default async function (sock, m, from, args, config) {
-  const sender = m.key.participant || m.key.remoteJid;
-  const game = games.get(from);
   const action = args[0]?.toLowerCase();
+  const sender = m.sender || m.key.participant || from;
 
-  // 1. بدء لعبة جديدة أو حذف لعبة سابقة
-  if (action === "start" || action === "بدء") {
-    if (game) return sock.sendMessage(from, { text: "⚠️ هناك لعبة جارية بالفعل في هذا الشات! اكتب `.xo حذف` لإنهائها." }, { quoted: m });
+  // دالة رسم لوحة اللعبة
+  const renderBoard = (board) => {
+    const emojis = { 1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", X: "❌", O: "⭕" };
+    return (
+      `${emojis[board[0]]} | ${emojis[board[1]]} | ${emojis[board[2]]}\n` +
+      `───────────\n` +
+      `${emojis[board[3]]} | ${emojis[board[4]]} | ${emojis[board[5]]}\n` +
+      `───────────\n` +
+      `${emojis[board[6]]} | ${emojis[board[7]]} | ${emojis[board[8]]}`
+    );
+  };
 
-    games.set(from, {
-      playerX: sender,
-      playerO: null,
+  // دالة التحقق من الفائز
+  const checkWinner = (board) => {
+    const lines = [
+      [0, 1, 2], [3, 4, 5], [6, 7, 8], // أفقي
+      [0, 3, 6], [1, 4, 7], [2, 5, 8], // رأسي
+      [0, 4, 8], [2, 4, 6]             // قطري
+    ];
+    for (let [a, b, c] of lines) {
+      if (board[a] === board[b] && board[a] === board[c]) return board[a];
+    }
+    if (board.every(cell => cell === "X" || cell === "O")) return "tie";
+    return null;
+  };
+
+  // 1. بدء لعبة جديدة
+  if (action === "بدء" || action === "start") {
+    if (global.xoGames[from]) {
+      return sock.sendMessage(from, { 
+        text: "⚠️ توجد لعبة قائمة بالفعل في هذه المحادثة! اكتب `.xo الغاء` لإنهائها." 
+      }, { quoted: m });
+    }
+
+    global.xoGames[from] = {
+      player1: sender,
+      player2: null,
       turn: sender,
-      board: Array(9).fill(null),
+      board: [1, 2, 3, 4, 5, 6, 7, 8, 9],
       status: "waiting"
-    });
+    };
 
-    return sock.sendMessage(from, {
-      text: `🎮 *تم إنشاء لعبة إكس-أو (XO) جديدة!*\n\n❌ اللاعب الأول: @${sender.split("@")[0]}\n⭕ اللاعب الثاني: بانتظار لاعب يكتب *.xo انضمام*\n\nاكتب *.xo حذف* لإلغاء اللعبة.`,
+    return sock.sendMessage(from, { 
+      text: `🎮 *تم إنشاء لعبة X - O جديدة!*\n\n👤 اللاعب الأول (❌): @${sender.split("@")[0]}\n⏳ بانتظار الخصم...\n\n👉 للانضمام اكتب: *.xo انضمام*`,
       mentions: [sender]
     }, { quoted: m });
   }
 
-  // 2. انضمام اللاعب الثاني
-  if (action === "join" || action === "انضمام") {
-    if (!game) return sock.sendMessage(from, { text: "⚠️ لا توجد لعبة نشطة حالياً. اكتب `.xo بدء` لإنشاء واحدة." }, { quoted: m });
-    if (game.playerO) return sock.sendMessage(from, { text: "⚠️ اكتمل عدد اللاعبين بالفعل!" }, { quoted: m });
-    if (game.playerX === sender) return sock.sendMessage(from, { text: "⚠️ أنت مسجل كلاعب أول بالفعل!" }, { quoted: m });
+  // 2. انضمام الخصم للعبة
+  if (action === "انضمام" || action === "join") {
+    const game = global.xoGames[from];
+    if (!game || game.status !== "waiting") {
+      return sock.sendMessage(from, { 
+        text: "⚠️ لا توجد لعبة تنتظر خصماً حالياً. اكتب `.xo بدء` لإنشاء لعبة جديدة." 
+      }, { quoted: m });
+    }
 
-    game.playerO = sender;
+    if (game.player1 === sender) {
+      return sock.sendMessage(from, { 
+        text: "⚠️ لا يمكنك اللعب ضد نفسك! انتظر لاعباً آخر للانضمام." 
+      }, { quoted: m });
+    }
+
+    game.player2 = sender;
     game.status = "playing";
 
-    const boardText = `
-🎮 *بدأت المعركة بين اللاعبين:*
-❌ @${game.playerX.split("@")[0]}  *ضد*  ⭕ @${game.playerO.split("@")[0]}
-
-${renderBoard(game.board)}
-
-👉 الدور الآن على: @${game.turn.split("@")[0]}
-💡 للعب: اكتب رقم الخانة (مثال: *.xo 5*)
-`.trim();
-
-    return sock.sendMessage(from, { text: boardText, mentions: [game.playerX, game.playerO, game.turn] }, { quoted: m });
+    return sock.sendMessage(from, { 
+      text: `⚔️ *بدأت اللعبة!*\n\n❌ اللاعب 1: @${game.player1.split("@")[0]}\n⭕ اللاعب 2: @${game.player2.split("@")[0]}\n\nدور اللاعب ❌ للبدء!\n\n${renderBoard(game.board)}\n\n👉 للعب اكتب: *.xo [رقم المربع من 1 إلى 9]*`,
+      mentions: [game.player1, game.player2]
+    }, { quoted: m });
   }
 
-  // 3. حذف اللعبة
-  if (action === "delete" || action === "حذف" || action === "انهاء") {
-    if (!game) return sock.sendMessage(from, { text: "⚠️ لا توجد لعبة نشطة لحذفها." }, { quoted: m });
-    games.delete(from);
-    return sock.sendMessage(from, { text: "🗑️ تم إنهاء اللعبة بنجاح." }, { quoted: m });
+  // 3. إلغاء اللعبة
+  if (action === "الغاء" || action === "إنهاء" || action === "حذف") {
+    if (!global.xoGames[from]) {
+      return sock.sendMessage(from, { text: "⚠️ لا توجد لعبة قائمة لإلغائها." }, { quoted: m });
+    }
+    delete global.xoGames[from];
+    return sock.sendMessage(from, { text: "🗑️ تم إلغاء اللعبة بنجاح." }, { quoted: m });
   }
 
-  // 4. تنفيذ حركة لعب (اختيار رقم من 1 إلى 9)
-  const pos = parseInt(args[0]) - 1;
-  if (!isNaN(pos) && pos >= 0 && pos <= 8) {
+  // 4. تنفيذ حركة (اختيار رقم المربع من 1 إلى 9)
+  const position = parseInt(action);
+  if (!isNaN(position) && position >= 1 && position <= 9) {
+    const game = global.xoGames[from];
     if (!game || game.status !== "playing") {
-      return sock.sendMessage(from, { text: "⚠️ لا توجد مباراة قيد التشغيل. اكتب `.xo بدء` أولاً." }, { quoted: m });
+      return sock.sendMessage(from, { 
+        text: "⚠️ لا توجد مباراة جارية حالياً. اكتب `.xo بدء` للبدء." 
+      }, { quoted: m });
     }
 
     if (sender !== game.turn) {
-      return sock.sendMessage(from, { text: `⚠️ ليس دورك الآن! الدور على @${game.turn.split("@")[0]}`, mentions: [game.turn] }, { quoted: m });
+      return sock.sendMessage(from, { 
+        text: "⏳ ليس دورك الآن! انتظر حتى ينتهي دور الخصم." 
+      }, { quoted: m });
     }
 
-    if (game.board[pos] !== null) {
-      return sock.sendMessage(from, { text: "⚠️ هذه الخانة ممتلئة بالفعل، اختر خانة أخرى فارغة!" }, { quoted: m });
+    const index = position - 1;
+    if (game.board[index] === "X" || game.board[index] === "O") {
+      return sock.sendMessage(from, { text: "⚠️ هذا المربع مشغول بالفعل! اختر رقماً آخر." }, { quoted: m });
     }
 
-    // تسجيل الرمز في الخانة
-    const symbol = sender === game.playerX ? "X" : "O";
-    game.board[pos] = symbol;
+    const mark = sender === game.player1 ? "X" : "O";
+    game.board[index] = mark;
 
-    // فحص الفائز
     const result = checkWinner(game.board);
 
     if (result) {
-      games.delete(from);
+      let winText = "";
       if (result === "tie") {
-        return sock.sendMessage(from, {
-          text: `🤝 *تعادل! انتهت اللعبة بدون فائز.*\n\n${renderBoard(game.board)}`
-        }, { quoted: m });
+        winText = `🤝 *انتهت اللعبة بالتعادل!*`;
       } else {
-        const winner = result === "X" ? game.playerX : game.playerO;
-        return sock.sendMessage(from, {
-          text: `🎉 *مبروك الفوز يا أسطورة!* 🏆\n\nالفائز: @${winner.split("@")[0]} (${result === "X" ? "❌" : "⭕"})\n\n${renderBoard(game.board)}`,
-          mentions: [winner]
-        }, { quoted: m });
+        const winner = result === "X" ? game.player1 : game.player2;
+        winText = `🎉 *مبروك! فاز اللاعب ${result === "X" ? "❌" : "⭕"}* (@${winner.split("@")[0]})!`;
       }
+
+      delete global.xoGames[from];
+      return sock.sendMessage(from, {
+        text: `${winText}\n\n${renderBoard(game.board)}`,
+        mentions: [game.player1, game.player2]
+      }, { quoted: m });
     }
 
     // تبديل الدور
-    game.turn = game.turn === game.playerX ? game.playerO : game.playerX;
+    game.turn = game.turn === game.player1 ? game.player2 : game.player1;
+    const nextMark = game.turn === game.player1 ? "❌" : "⭕";
 
-    const nextText = `
-${renderBoard(game.board)}
-
-👉 الدور الآن على: @${game.turn.split("@")[0]}
-💡 اكتب: *.xo [رقم من 1 إلى 9]*
-`.trim();
-
-    return sock.sendMessage(from, { text: nextText, mentions: [game.turn] }, { quoted: m });
+    return sock.sendMessage(from, {
+      text: `دور اللاعب ${nextMark}: @${game.turn.split("@")[0]}\n\n${renderBoard(game.board)}`,
+      mentions: [game.turn]
+    }, { quoted: m });
   }
 
-  // رسالة المساعدة في حال كتابة .xo بدون مدخلات
-  const helpText = `
-🎮 *طريقة لعب إكس-أو (XO):*
-
-1️⃣ *.xo بدء* : لبدء لعبة جديدة
-2️⃣ *.xo انضمام* : لانضمام اللاعب الثاني
-3️⃣ *.xo [1-9]* : لاختيار رقم الخانة للعب
-4️⃣ *.xo حذف* : لإنهاء اللعبة
-`.trim();
-
-  await sock.sendMessage(from, { text: helpText }, { quoted: m });
+  // الرسالة الإرشادية في حال كتابة .xo فقط
+  await sock.sendMessage(from, {
+    text: "🎮 *أوامر لعبة X - O:*\n\n" +
+      "🔹 *.xo بدء* : إنشاء لعبة جديدة\n" +
+      "🔹 *.xo انضمام* : الانضمام للعبة الحالية\n" +
+      "🔹 *.xo [1-9]* : اختيار مربع للعب\n" +
+      "🔹 *.xo الغاء* : إنهاء اللعبة الحالية"
+  }, { quoted: m });
 }
