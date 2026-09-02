@@ -1,29 +1,41 @@
 export default async function (sock, m, from, args, config = {}) {
   try {
-    const senderJid = m.key.participant || m.key.remoteJid || "";
-    const senderNumber = senderJid.split("@")[0].replace(/[^0-9]/g, "");
+    // 1. استخراج معرّف المرسل الفعلي (يدعم LID، رقم الهاتف، وإرسال البوت لنفسه)
+    const rawSender = m.sender || m.key.participant || (m.key.fromMe ? sock.user?.id : from) || "";
+    const cleanSender = rawSender.split("@")[0].replace(/[^0-9]/g, "");
+
+    // فحص رقم الهاتف الأساسي في حال توفره بحزم Baileys الحديثة
+    const participantPn = m.key?.participantPn || m.key?.remoteJidPn || "";
+    const cleanPn = participantPn.split("@")[0].replace(/[^0-9]/g, "");
+
     const prefix = config.prefix || ".";
     const botName = config.botName || "SMART BOT";
 
-    // التحقق من صلاحيات المطور
-    const sudoList = Array.isArray(config.sudo) 
-      ? config.sudo.map(num => String(num).replace(/[^0-9]/g, ""))
-      : [String(config.sudo || "").replace(/[^0-9]/g, "")];
+    // 2. تجميع كل الصلاحيات المصرح لها (sudo, owner, vip)
+    const toList = (val) => (Array.isArray(val) ? val : [val]).filter(Boolean).map(v => String(v).replace(/[^0-9]/g, ""));
+    const authorizedList = new Set([
+      ...toList(config.sudo),
+      ...toList(config.owner),
+      ...toList(config.vip),
+      ...toList(config.vipUsers)
+    ]);
 
-    const isSudo = sudoList.includes(senderNumber);
+    // 3. التحقق من الصلاحية (سواء رسالة من حساب البوت، أو تطابق المعرف/رقم الهاتف)
+    const isAuthorized = m.key.fromMe || authorizedList.has(cleanSender) || (cleanPn && authorizedList.has(cleanPn));
 
-    if (!isSudo) {
+    if (!isAuthorized) {
       return sock.sendMessage(from, { 
-        text: "⛔ *عذراً، هذه اللوحة مخصصة للمطورين وحسابات VIP المصرح لها فقط!*" 
+        text: `⛔ *عذراً، هذه اللوحة مخصصة للمطورين وحسابات VIP المصرح لها فقط!*\n\n🆔 معرّفك الحالي:\n\`${cleanSender}\`\n\n💡 قم بإضافة هذا المعرّف في مصفوفة \`sudo\` أو \`owner\` بملف الإعدادات لتفعيل الحساب.` 
       }, { quoted: m });
     }
 
-    const startTime = Date.now();
-    const latency = ((Date.now() - startTime) / 1000).toFixed(4);
+    // 4. حساب سرعة الاستجابة بدقة من وقت وصول الرسالة
+    const msgTime = m.messageTimestamp ? Number(m.messageTimestamp) * 1000 : Date.now();
+    const latency = Math.abs((Date.now() - msgTime) / 1000).toFixed(4);
 
     const vipMessage = `
 ╭━━━〔 👑 *VIP CONTROL PANEL* 〕━━━╮
-┃ 👤 *المطور المعتمد:* +${senderNumber}
+┃ 👤 *المطور المعتمد:* @${cleanSender}
 ┃ 🛡️ *مستوى الصلاحية:* Root / Owner
 ┃ ⚡ *الاستجابة:* ${latency}s
 ┃ 🤖 *البوت:* ${botName}
@@ -43,7 +55,10 @@ export default async function (sock, m, from, args, config = {}) {
 └ ${prefix}ping ‹فحص سرعة استجابة السيرفر›
 `.trim();
 
-    await sock.sendMessage(from, { text: vipMessage }, { quoted: m });
+    await sock.sendMessage(from, { 
+      text: vipMessage, 
+      mentions: [rawSender] 
+    }, { quoted: m });
 
   } catch (err) {
     await sock.sendMessage(from, { 
