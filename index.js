@@ -2,7 +2,20 @@ import makeWASocket, { useMultiFileAuthState, DisconnectReason } from "@whiskeys
 import pino from "pino";
 import fs from "fs";
 import path from "path";
+import http from "http";
 import config from "./config.js";
+
+// ==========================================
+// 🌐 خادم ويب مصغر لإبقاء Replit نشطاً
+// ==========================================
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+  res.write("البوت يعمل 24/7 بنجاح!");
+  res.end();
+}).listen(PORT, () => {
+  console.log(`🌐 خادم الويب يعمل الآن على المنفذ ${PORT}`);
+});
 
 async function startBot() {
   if (process.env.SESSION_ID && !fs.existsSync("./session/creds.json")) {
@@ -54,7 +67,6 @@ async function startBot() {
 
         const userTag = `@${num.split("@")[0]}`;
 
-        // 1. حالة انضمام عضو جديد
         if (action === "add") {
           const welcomeText = `
 ╭━━━〔 🌟 *مرحباً بك في المجموعة* 〕━━━╮
@@ -74,10 +86,7 @@ ${metadata.desc || "لا يوجد وصف محدد حالياً."}
             caption: welcomeText,
             mentions: [num]
           });
-        }
-
-        // 2. حالة مغادرة أو طرد عضو
-        else if (action === "remove") {
+        } else if (action === "remove") {
           const goodbyeText = `
 ╭━━━〔 👋 *توديع عضو* 〕━━━╮
 ┃ 👤 *العضو:* ${userTag}
