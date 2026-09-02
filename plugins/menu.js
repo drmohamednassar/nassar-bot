@@ -10,23 +10,28 @@ export default async function (sock, m, from, args, config = {}) {
   try {
     const startTime = Date.now();
     const prefix = config.prefix || ".";
-    const botName = config.botName || "SMART BOT";
-    const ownerName = config.ownerName || "المطور";
+    const botName = config.botName || "سورس محمد نصار";
+    const ownerName = config.ownerName || "محمد نصار";
 
-    const senderJid = m.key.participant || m.key.remoteJid || "";
-    const senderNumber = senderJid ? senderJid.split("@")[0] : "مستخدم";
+    const senderJid = m.sender || m.key.participant || m.key.remoteJid || "";
+    const senderNumber = senderJid ? senderJid.split("@")[0].replace(/[^0-9]/g, "") : "مستخدم";
     const senderName = m.pushName || "مستخدم";
     
     const uptime = formatUptime(process.uptime());
     const now = new Date();
     
+    // ضبط التاريخ بدقة وفق النطاق الزمني لمصر (Africa/Cairo)
     const dateStr = now.toLocaleDateString("ar-EG", {
+      timeZone: "Africa/Cairo",
       weekday: "long",
       day: "numeric",
       month: "long",
       year: "numeric"
     });
+
+    // ضبط الوقت بنظام 12 ساعة (ص/م) بتوقيت مصر
     const timeStr = now.toLocaleTimeString("ar-EG", {
+      timeZone: "Africa/Cairo",
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
