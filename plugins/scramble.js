@@ -1,46 +1,93 @@
-const words = [
-  "برمجة", "حاسوب", "واتساب", "فلسطين", "القاهرة", "ذكاء",
-  "خوارزمية", "مستشفى", "طبيعة", "طائرة", "أخطبوط", "مجرة"
+// حفظ الألعاب النشطة في الذاكرة العامة للبوت لمنع مسحها عند تكرار الاستدعاء
+global.scrambleGames = global.scrambleGames || {};
+
+// قائمة الكلمات
+const wordsList = [
+  "فلسطين", "القاهرة", "برمجة", "كمبيوتر", "مستشفى",
+  "سيارة", "طائرة", "جامعة", "إنترنت", "هاتف",
+  "مكتبة", "طبيب", "مهندس", "رياضيات", "مدرسة"
 ];
 
-const activeScrambles = new Map();
-
-function shuffleWord(word) {
-  return word.split("").sort(() => Math.random() - 0.5).join(" - ");
+// دالة لتنظيف وتوحيد الحروف العربية للمقارنة الدقيقة
+function normalizeArabic(text) {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[\u064B-\u065F]/g, ""); // إزالة التشكيل
 }
 
-export default async function (sock, m, from, args) {
-  const current = activeScrambles.get(from);
-  const guess = args.join(" ").trim();
+// دالة خلط الحروف عشوائياً مع ضمان اختلاف الترتيب عن الكلمة الأصلية
+function scrambleWord(word) {
+  const letters = word.split("");
+  for (let i = letters.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [letters[i], letters[j]] = [letters[j], letters[i]];
+  }
+  const result = letters.join("");
+  return result === word ? scrambleWord(word) : letters.join(" - ");
+}
 
-  // التحقق من التخمين
-  if (guess && current) {
-    if (guess === current.word) {
-      activeScrambles.delete(from);
-      const sender = (m.key.participant || m.key.remoteJid).split("@")[0];
-      return sock.sendMessage(from, {
-        text: `🎊 *صحيح! أحسنت التخمين!* 🏆\n\n👤 الفائز: @${sender}\n📝 الكلمة الأصلية هي: *${current.word}*`,
-        mentions: [m.key.participant || m.key.remoteJid]
+export default async function (sock, m, from, args, config) {
+  const input = args.join(" ").trim();
+  const currentGame = global.scrambleGames[from];
+
+  // 1. خيار الاستسلام أو كشف الحل
+  if (currentGame && (input === "حل" || input === "استسلام" || input === "انسحاب")) {
+    clearTimeout(currentGame.timeout);
+    const correctWord = currentGame.word;
+    delete global.scrambleGames[from];
+    return sock.sendMessage(from, { 
+      text: `🏳️ تم كشف الحل!\n💡 الكلمة الصحيحة هي: *${correctWord}*` 
+    }, { quoted: m });
+  }
+
+  // 2. التحقق من إجابة اللاعب إذا كانت هناك لعبة جارية
+  if (currentGame && input) {
+    if (normalizeArabic(input) === normalizeArabic(currentGame.word)) {
+      clearTimeout(currentGame.timeout);
+      const solvedWord = currentGame.word;
+      delete global.scrambleGames[from];
+      return sock.sendMessage(from, { 
+        text: `🎉 *إجابة صحيحة! أحسنت!* 👏\nالكلمة هي بالفعل: *${solvedWord}*` 
       }, { quoted: m });
     } else {
-      return sock.sendMessage(from, { text: "❌ محاولة خاطئة، ركز في الحروف وحاول مجدداً!" }, { quoted: m });
+      return sock.sendMessage(from, { 
+        text: `❌ إجابة خاطئة! فكّر جيداً وحاول مرة أخرى.\n\nالحروف: [ *${currentGame.scrambled}* ]` 
+      }, { quoted: m });
     }
   }
 
-  // توليد كلمة مبعثرة جديدة
-  const randomWord = words[Math.floor(Math.random() * words.length)];
-  const scrambled = shuffleWord(randomWord);
+  // 3. التذكير بالكلمة الحالية إذا كتب المستخدم .scramble بدون إجابة
+  if (currentGame && !input) {
+    return sock.sendMessage(from, { 
+      text: `⚠️ توجد كلمة قيد الحل بالفعل!\n\n👉 الحروف: [ *${currentGame.scrambled}* ]\n\n💡 أرسل الإجابة هكذا: *.scramble [الكلمة]*\n👀 للاستسلام: *.scramble حل*` 
+    }, { quoted: m });
+  }
 
-  activeScrambles.set(from, { word: randomWord });
+  // 4. بدء تحدي جديد واختيار كلمة عشوائية
+  const targetWord = wordsList[Math.floor(Math.random() * wordsList.length)];
+  const scrambled = scrambleWord(targetWord);
 
-  const msg = `
-🔤 *تحدي ترتيب الكلمة المبعثرة:*
+  // مؤقت لإلغاء التحدي تلقائياً بعد 90 ثانية في حال عدم التفاعل
+  const timeout = setTimeout(async () => {
+    if (global.scrambleGames[from]) {
+      delete global.scrambleGames[from];
+      await sock.sendMessage(from, { 
+        text: `⌛ *انتهى الوقت!* لم يتمكن أحد من تكوين الكلمة.\nالإجابة الصحيحة كانت: *${targetWord}*` 
+      });
+    }
+  }, 90000);
 
-رتب الحروف التالية لتكوين كلمة مفيدة:
-👉 [ *${scrambled}* ]
+  global.scrambleGames[from] = {
+    word: targetWord,
+    scrambled: scrambled,
+    timeout: timeout
+  };
 
-💡 أرسل الكلمة هكذا: *.scramble [الكلمة]*
-`.trim();
-
-  await sock.sendMessage(from, { text: msg }, { quoted: m });
+  await sock.sendMessage(from, { 
+    text: `🔤 *تحدي ترتيب الكلمة المبعثرة:*\n\nرتب الحروف التالية لتكوين كلمة مفيدة:\n👉 [ *${scrambled}* ]\n\n💡 أرسل الكلمة هكذا: *.scramble [الكلمة]*\n👀 للاستسلام: *.scramble حل*` 
+  }, { quoted: m });
 }
