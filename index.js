@@ -13,7 +13,7 @@ http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
   res.write("البوت يعمل 24/7 بنجاح!");
   res.end();
-}).listen(PORT, () => {
+}).listen(PORT, "0.0.0.0", () => {
   console.log(`🌐 خادم الويب يعمل الآن على المنفذ ${PORT}`);
 });
 
